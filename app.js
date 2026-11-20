@@ -85,16 +85,24 @@ const KEY = 'toffy-itp-v1';
 const MAXH = 5, REGEN = 30 * 60 * 1000, PERLV = 50;
 const DEF = { v: 1, onboard: false, target: 500, goal: 30, xp: 0, seeds: 0, streak: 0, best: 0, lastDay: null, hearts: 5, heartTs: 0,
   done: {}, mist: [], stats: { S: [], R: [], L: [] }, ua: {}, hist: {}, set: { inf: false, all: false, rate: 0.95, sound: true } };
-let S = load();
-function load() {
+function normalize(j) {
   const d = JSON.parse(JSON.stringify(DEF));
-  try {
-    const j = JSON.parse(localStorage.getItem(KEY));
-    if (j && j.v === 1) return Object.assign(d, j, { set: Object.assign(d.set, j.set || {}), stats: Object.assign(d.stats, j.stats || {}) });
-  } catch (e) { /* 保存領域が使えない環境でも動く */ }
+  if (j && j.v === 1) return Object.assign(d, j, { set: Object.assign(d.set, j.set || {}), stats: Object.assign(d.stats, j.stats || {}) });
   return d;
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* noop */ } }
+function load() {
+  try { return normalize(JSON.parse(localStorage.getItem(KEY))); } catch (e) { return normalize(null); }
+}
+const bodyOf = s => JSON.stringify(Object.assign({}, s, { updatedAt: 0 }));
+let S = load();
+let lastSaved = bodyOf(S);
+function save() {
+  const body = bodyOf(S);
+  if (body === lastSaved) return;
+  lastSaved = body; S.updatedAt = Date.now();
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 保存領域が使えない環境でも動く */ }
+  cloudQueue();
+}
 const dayStr = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const dayOffset = n => { const d = new Date(); d.setDate(d.getDate() + n); return dayStr(d); };
 const levelOf = xp => ({ lv: 1 + Math.floor(xp / PERLV), cur: xp % PERLV });
@@ -122,6 +130,88 @@ function loseHeart() { if (S.set.inf) return; S.hearts = Math.max(0, S.hearts - 
 function heartWait() {
   if (S.hearts >= MAXH || !S.heartTs) return '';
   return Math.max(1, Math.ceil((REGEN - (Date.now() - S.heartTs)) / 60000)) + '分';
+}
+
+/* ───────── クラウドセーブ（Googleアカウント・Firebase） ───────── */
+const FB_CONFIG = { apiKey: 'AIzaSyDUPgDqwbTM4pz0QUGoG3_ItshCl7G5LZ8', authDomain: 'toffee-itp-quest.firebaseapp.com', projectId: 'toffee-itp-quest', appId: '1:370071498459:web:cd60362eec098e351f66fe', messagingSenderId: '370071498459' };
+const CLOUD = { ok: /(^|\.)github\.io$/.test(location.hostname) || location.hostname === 'localhost', ready: false, user: null, state: 'idle', at: 0, err: '', timer: null };
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+async function cloudInit() {
+  if (!CLOUD.ok) return;
+  try {
+    const base = 'https://www.gstatic.com/firebasejs/10.12.2/';
+    await loadScript(base + 'firebase-app-compat.js');
+    await Promise.all([loadScript(base + 'firebase-auth-compat.js'), loadScript(base + 'firebase-firestore-compat.js')]);
+    firebase.initializeApp(FB_CONFIG);
+    CLOUD.auth = firebase.auth(); CLOUD.db = firebase.firestore();
+    CLOUD.auth.getRedirectResult().catch(cloudErr);
+    CLOUD.auth.onAuthStateChanged(async u => {
+      CLOUD.user = u; CLOUD.ready = true;
+      if (u) await cloudPull(); else CLOUD.state = 'idle';
+      cloudRefresh();
+    });
+  } catch (e) { CLOUD.ready = true; CLOUD.state = 'offline'; cloudRefresh(); }
+}
+const cloudRef = () => CLOUD.db.collection('users').doc(CLOUD.user.uid);
+async function cloudPull() {
+  CLOUD.state = 'sync';
+  try {
+    const snap = await cloudRef().get();
+    const d = snap.exists ? snap.data() : null;
+    const remoteNewer = d && ((d.xp || 0) > S.xp || ((d.xp || 0) === S.xp && (d.updatedAt || 0) > (S.updatedAt || 0)));
+    if (remoteNewer) {
+      S = normalize(JSON.parse(d.save)); lastSaved = bodyOf(S);
+      try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* noop */ }
+      CLOUD.state = 'ok'; CLOUD.at = Date.now();
+      toast('アカウントのセーブを読み込んだ');
+      if (!L && !learnCtl && !obCtl) { closeLayer(); render(true); }
+    } else await cloudPush();
+  } catch (e) { cloudErr(e); }
+}
+async function cloudPush() {
+  if (!CLOUD.user) return;
+  CLOUD.state = 'sync';
+  try {
+    await cloudRef().set({ save: JSON.stringify(S), xp: S.xp, updatedAt: S.updatedAt || Date.now() });
+    CLOUD.state = 'ok'; CLOUD.at = Date.now(); CLOUD.err = '';
+  } catch (e) { cloudErr(e); }
+  cloudRefresh();
+}
+function cloudQueue() {
+  if (!CLOUD.user) return;
+  clearTimeout(CLOUD.timer);
+  CLOUD.timer = setTimeout(cloudPush, 1500);
+}
+function cloudErr(e) {
+  const code = (e && e.code) || '';
+  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
+  CLOUD.state = 'error';
+  CLOUD.err = code === 'auth/unauthorized-domain' || code === 'auth/operation-not-allowed' ? 'ログインの設定がまだ完了していません' :
+    code === 'auth/network-request-failed' || code === 'unavailable' ? '通信できませんでした。電波のある所でもう一度' : 'うまく保存できませんでした';
+  cloudRefresh();
+}
+async function cloudSignIn() {
+  if (!CLOUD.auth) return;
+  const p = new firebase.auth.GoogleAuthProvider();
+  try { await CLOUD.auth.signInWithPopup(p); }
+  catch (e) {
+    if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment')) {
+      try { await CLOUD.auth.signInWithRedirect(p); } catch (e2) { cloudErr(e2); }
+    } else cloudErr(e);
+  }
+}
+function cloudRefresh() { if (tab === 'me' && !L && !learnCtl && !obCtl && !$('.modal')) render(); }
+function cloudPanel() {
+  if (!CLOUD.ok) return `<div class="win panel"><h3>アカウント保存</h3><p class="small" style="margin:0">この表示ではアカウント保存を使えません。<br>https://mizune86.github.io/toffee-itp-quest/ から開くと、Googleアカウントにセーブできます。</p></div>`;
+  if (!CLOUD.ready) return `<div class="win panel"><h3>アカウント保存</h3><p class="small" style="margin:0">読み込み中…</p></div>`;
+  if (CLOUD.state === 'offline' && !CLOUD.user) return `<div class="win panel"><h3>アカウント保存</h3><p class="small" style="margin:0">今は通信できないため使えません。セーブはこの端末に保存されています。</p></div>`;
+  if (!CLOUD.user) return `<div class="win panel"><h3>アカウント保存</h3><p class="small" style="margin:0 0 10px">Googleでログインすると、セーブデータがアカウントに保存されます。PCとスマホで同じ進み具合で遊べるぞい。</p>
+${CLOUD.err ? `<p class="small" style="color:var(--red);margin:0 0 8px">${esc(CLOUD.err)}</p>` : ''}<button class="btn gold wide" data-act="login">▶ Googleでログイン</button></div>`;
+  const t = CLOUD.at ? new Date(CLOUD.at) : null;
+  const st = CLOUD.state === 'sync' ? '保存中…' : CLOUD.state === 'error' ? `<span style="color:var(--red)">${esc(CLOUD.err)}</span>` : t ? `保存ずみ（${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}）` : '保存ずみ';
+  return `<div class="win panel"><h3>アカウント保存</h3>
+<div class="stats" style="grid-template-columns:1fr"><div>アカウント<b style="font-family:var(--f);font-size:14px">${esc(CLOUD.user.displayName || CLOUD.user.email || 'Google')}</b></div><div>状態<b style="font-family:var(--f);font-size:14px">${st}</b></div></div>
+<p class="small" style="margin:8px 0 10px">進み具合は自動でアカウントに保存されます。</p><button class="btn ghost wide" data-act="logout">ログアウト</button></div>`;
 }
 
 /* ───────── 問題バンクとステージ ───────── */
@@ -457,6 +547,7 @@ function viewMe() {
   const wd = ['日', '月', '火', '水', '木', '金', '土'];
   const need = ['L', 'S', 'R'].filter(k => !pr[k]).map(k => `${SECN[k]}あと${10 - (S.stats[k] || []).length}問`).join('・');
   return `<h1 class="page-h">ステータス</h1>
+${cloudPanel()}
 <div class="win panel"><div class="row">${toffee('idle')}<div style="min-width:0;flex:1"><div class="p8" style="font-size:12px;color:var(--gold)">TOFFEE Lv.${lv}</div><div class="expbar" style="width:100%;margin-top:8px"><i style="width:${cur / PERLV * 100}%"></i></div><div class="small" style="margin-top:4px">次のレベルまで ${PERLV - cur} EXP</div></div></div>
 <div class="stats"><div>HP<b>${S.set.inf ? '∞' : S.hearts + '/' + MAXH}</b></div><div>EXP<b>${S.xp}</b></div><div>連続<b>${S.streak}日</b></div><div>最高連続<b>${S.best}日</b></div><div>ひまわりの種<b>${S.seeds}</b></div><div>クリア<b>${nDone}/${ALL.length}</b></div></div></div>
 <div class="win panel"><h3>予想スコア（目安）</h3>
@@ -798,6 +889,8 @@ document.addEventListener('click', e => {
     case 'tocurrent': { selNode = null; closeLayer(); render(true); return; }
     case 'talk': sfx('msg'); modal(`${toffee(pick(['idle', 'joy', 'think']))}<h3>トッフィー</h3><p style="color:var(--ink)">「${esc(pick(LINES.tips))}」</p><div class="stack"><button class="btn gold" data-act="closemodal">▶ OK</button></div>`); return;
     case 'hearts': heartsModal(); return;
+    case 'login': CLOUD.err = ''; cloudSignIn(); return;
+    case 'logout': if (CLOUD.auth) CLOUD.auth.signOut(); return;
     case 'streakinfo': modal(`${toffee(S.lastDay === dayStr() ? 'joy' : 'think')}<h3>連続 ${S.streak}日</h3><p>${S.lastDay === dayStr() ? '今日はもう冒険したのう。明日もひとつ進めば記録がのびるぞい' : '今日ひとつ進めば、連続記録がのびるぞい'}（最高 ${S.best}日）</p><div class="stack"><button class="btn gold" data-act="closemodal">▶ OK</button></div>`); return;
     case 'review': {
       const ids = S.mist.filter(id => Q[id]).slice(0, 10);
@@ -827,7 +920,7 @@ document.addEventListener('click', e => {
     case 'lnext': if (learnCtl) learnCtl.next(); return;
     case 'lprev': if (learnCtl) learnCtl.prev(); return;
     case 'lend': if (learnCtl) learnCtl.end(); return;
-    case 'reset1': t.textContent = 'もう一度押すと、すべての記録が消えます'; t.classList.remove('ghost'); t.classList.add('red'); t.dataset.act = 'reset2'; return;
+    case 'reset1': t.textContent = CLOUD.user ? 'もう一度押すと、アカウントの記録もすべて消えます' : 'もう一度押すと、すべての記録が消えます'; t.classList.remove('ghost'); t.classList.add('red'); t.dataset.act = 'reset2'; return;
     case 'reset2': S = JSON.parse(JSON.stringify(DEF)); save(); tab = 'path'; render(); onboarding(); return;
   }
 });
@@ -844,6 +937,7 @@ setInterval(() => { if (!L && !learnCtl && !obCtl && !$('.modal') && S.hearts < 
 refreshDaily();
 render(true);
 if (!S.onboard) onboarding();
+cloudInit();
 
 /* PWA：自分のURLで公開したときだけオフライン対応を有効にする */
 try {
