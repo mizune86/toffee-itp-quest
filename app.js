@@ -54,7 +54,15 @@ const LINES = {
     'neither A nor B はBに合わせる。Bが主じゃ', 'わしの好物はひまわりの種。おぬしの好物は…正解かのう？', '一日ひとつでもよい。続ける者がいちばん強いのじゃ',
     '合計点は (L＋S＋R)×10÷3。目標から逆算するのじゃ', 'despite の後ろは名詞。節が来たら although を使うのじゃ', 'まちがえた問題は宿屋で倒せば、HPが戻るぞい'],
   result: { perfect: 'ふぉっふぉっふぉ、満点じゃ！ほっぺ袋がはちきれそうじゃわい', good: 'よい冒険であった。この調子で進むがよい', ok: '見事越えたのう。まちがえた所は宿屋で癒やすのじゃ', low: 'ここまで来ただけで立派なものじゃ。復習すれば、ぐんと伸びるぞい' },
-  levelup: 'レベルが上がったのう。わしの帽子のふさも誇らしげじゃ'
+  levelup: 'レベルが上がったのう。わしの帽子のふさも誇らしげじゃ',
+  word: {
+    intro: ['まずは意味と例文をよう見るのじゃ', '声に出して読むと、頭に残りやすいぞい', '知らん単語は恥ではない。これから覚えればよい', '例文の中の単語も、タップして調べてみるがよい'],
+    clear: ['単語の修行、見事であった。覚えた単語は読解にもリスニングにも効くぞい', '忘れかけた頃にもう一度。それが覚えるコツじゃ', '毎日ちょっとずつ。それがいちばんの近道じゃぞ'],
+    done: '今日の復習はもう終わりじゃ。新しい単語に挑んでもよいぞい',
+    due: n => `復習が待っておる単語が${n}語じゃ。忘れる前に叩くのがコツじゃぞい`,
+    fresh: '今日の復習はもうない。新しい単語に挑もうぞ',
+    all: '全部覚えたか…。見事じゃ。たまに復習しておくのじゃぞ'
+  }
 };
 
 /* ───────── ドット絵 ───────── */
@@ -85,7 +93,7 @@ function ic(name, cls = '') {
 const KEY = 'toffy-itp-v1';
 const MAXH = 5, REGEN = 30 * 60 * 1000, PERLV = 50;
 const DEF = { v: 1, onboard: false, target: 500, goal: 30, xp: 0, seeds: 0, streak: 0, best: 0, lastDay: null, hearts: 5, heartTs: 0,
-  done: {}, mist: [], stats: { S: [], R: [], L: [] }, ua: {}, hist: {}, set: { inf: false, all: false, rate: 0.95, sound: true } };
+  done: {}, mist: [], words: {}, stats: { S: [], R: [], L: [] }, ua: {}, hist: {}, set: { inf: false, all: false, rate: 0.95, sound: true } };
 function normalize(j) {
   const d = JSON.parse(JSON.stringify(DEF));
   if (j && j.v === 1) return Object.assign(d, j, { set: Object.assign(d.set, j.set || {}), stats: Object.assign(d.stats, j.stats || {}) });
@@ -281,7 +289,7 @@ const NODE = Object.fromEntries(ALL.map(n => [n.id, n]));
 const isDone = n => !!S.done[n.id];
 function isOpen(n) { const i = ALL.indexOf(n); return S.set.all || i === 0 || isDone(n) || isDone(ALL[i - 1]); }
 const currentNode = () => ALL.find(n => !isDone(n) && isOpen(n)) || null;
-const secOf = q => (q.t === 'fb' || q.t === 'er') ? 'S' : (q.t === 'vc' || q.t === 'rd' || q.t === 'pr') ? 'R' : (q.t === 'ls' || q.t === 'lt') ? 'L' : null;
+const secOf = q => (q.t === 'fb' || q.t === 'er') ? 'S' : (q.t === 'vc' || q.t === 'rd' || q.t === 'pr' || q.t === 'wq' || q.t === 'wi') ? 'R' : (q.t === 'ls' || q.t === 'lt') ? 'L' : null;
 const standalone = id => !Q[id].ctx;
 function makePair(ids) {
   const v = sample(ids.filter(id => Q[id] && Q[id].t === 'vc'), 5);
@@ -381,10 +389,179 @@ function typeInto(el, text) {
   typeTimer = setInterval(() => { i++; el.textContent = text.slice(0, i); if (i >= text.length) clearInterval(typeTimer); }, 26);
 }
 
+/* ───────── 単語システム（辞書・頻出単語・間隔反復） ───────── */
+const WSETS = [], WMAP = {};
+const POSLBL = { 名: '名詞', 動: '動詞', 形: '形容詞', 副: '副詞', 前: '前置詞', 接: '接続詞', 代: '代名詞', 冠: '冠詞', 助: '助動詞', 間: '間投詞', 数: '数詞', 固: '固有名詞' };
+const CONTENT_POS = { 名: 1, 動: 1, 形: 1, 副: 1 };
+const BASIC_W = { be: 1, do: 1, have: 1 };
+function addWord(set, w, pos, jp, syn, ex) {
+  const o = { w, pos: pos || '名', jp: jp || '', syn: syn || '', ex: ex || '', set: set.id };
+  set.list.push(o); if (!WMAP[w]) WMAP[w] = o;
+}
+(function buildWords() {
+  ['u3', 'u8', 'u13'].forEach(id => {
+    const u = UNITS.find(x => x.id === id); if (!u || !u.vocab) return;
+    const set = { id: 's-' + id, name: `${WORLD[id]}の単語`, list: [] };
+    u.vocab.forEach(v => {
+      const r = DictCore.lookup(v[0].split(' ')[0]);
+      addWord(set, r.lemma || v[0].toLowerCase(), r.senses ? r.senses[0][0] : '形', v[6].replace(/（多義語）/g, ''), v[2], v[1]);
+    });
+    WSETS.push(set);
+  });
+  (window.WORDSETS_SRC || []).forEach(s => {
+    const set = { id: s.id, name: s.name, list: [] };
+    s.src.split('\n').forEach(l => { l = l.trim(); if (!l) return; const p = l.split('|'); addWord(set, p[0], p[1], p[2], p[3], p[4]); });
+    WSETS.push(set);
+  });
+  const extra = {}; Object.keys(WMAP).forEach(w => { extra[w] = [[WMAP[w].pos, WMAP[w].jp]]; });
+  DictCore.setExtra(extra);
+})();
+const BOXD = [0, 1, 3, 7, 14, 30];
+const addDays = (s, n) => { const d = new Date(s + 'T00:00'); d.setDate(d.getDate() + n); return dayStr(d); };
+function wTouch(w, my) { return S.words[w] || (S.words[w] = { b: -1, d: dayStr(), n: 0, x: 0, my: my ? 1 : 0 }); }
+function wResult(w, ok) {
+  const st = wTouch(w);
+  if (ok) st.n++; else st.x++;
+  st.b = ok ? Math.min(5, Math.max(st.b, 0) + 1) : 0;
+  st.d = ok ? addDays(dayStr(), BOXD[st.b]) : dayStr();
+}
+function winfo(w) {
+  if (WMAP[w]) return WMAP[w];
+  const r = DictCore.lookup(w); if (!r.senses) return null;
+  return { w, pos: r.senses[0][0], jp: r.senses.slice(0, 2).map(x => x[1]).join('；'), syn: '', ex: '', set: 'my' };
+}
+const wLabel = st => !st || st.b < 0 ? '未学習' : st.b === 0 ? 'うろ覚え' : st.b <= 2 ? '学習中' : st.b <= 4 ? 'ほぼ覚えた' : 'マスター';
+const pipsHtml = st => `<span class="pips" aria-label="${wLabel(st)}">${Array.from({ length: 5 }, (_, i) => `<i class="${st && i < st.b ? 'on' : ''}"></i>`).join('')}</span>`;
+function allWordKeys() { const s = new Set(); WSETS.forEach(x => x.list.forEach(o => s.add(o.w))); Object.keys(S.words).forEach(w => s.add(w)); return s; }
+function wStats() {
+  const t = dayStr(); let learning = 0, mastered = 0, due = 0, fresh = 0, total = 0;
+  allWordKeys().forEach(w => {
+    total++; const st = S.words[w];
+    if (!st || st.b < 0) { fresh++; return; }
+    if (st.b >= 5) mastered++; else learning++;
+    if (st.d <= t) due++;
+  });
+  return { total, learning, mastered, due, fresh };
+}
+function wDueList(n) {
+  const t = dayStr();
+  return Object.keys(S.words).filter(w => S.words[w].b >= 0 && S.words[w].d <= t)
+    .sort((a, b) => S.words[a].b - S.words[b].b || (S.words[a].d < S.words[b].d ? -1 : 1)).slice(0, n);
+}
+function wNewList(n) {
+  const out = [];
+  Object.keys(S.words).forEach(w => { if (out.length < n && S.words[w].b < 0 && S.words[w].my) out.push(w); });
+  for (const s of WSETS) for (const o of s.list) {
+    if (out.length >= n) return out;
+    const st = S.words[o.w];
+    if ((!st || st.b < 0) && !out.includes(o.w)) out.push(o.w);
+  }
+  return out;
+}
+function makeWQ(w) {
+  const info = winfo(w);
+  const others = Object.values(WMAP).filter(o => o.w !== w);
+  const ordered = shuffle(others.filter(o => o.pos === info.pos)).concat(shuffle(others));
+  const take3 = (key, correct) => { const seen = new Set([correct]), out = []; for (const o of ordered) { const v = key(o); if (v && !seen.has(v)) { seen.add(v); out.push(v); if (out.length === 3) break; } } return out; };
+  const fmts = ['jp', 'en']; if (info.syn && info.ex) fmts.push('syn');
+  const f = pick(fmts);
+  const base = { id: `wq-${w}-${f}`, t: 'wq', f, w, pos: info.pos, jp: info.jp, syn: info.syn, ex: info.ex,
+    e: `${w}（${POSLBL[info.pos] || info.pos}）＝ ${info.jp}${info.syn ? `　類義語：${info.syn}` : ''}` };
+  if (f === 'jp') return Object.assign(base, { o: [info.jp].concat(take3(x => x.jp, info.jp)) });
+  if (f === 'en') return Object.assign(base, { o: [w].concat(take3(x => x.w, w)) });
+  return Object.assign(base, { o: [info.syn].concat(take3(x => x.syn, info.syn)) });
+}
+function wordSession() {
+  const nw = wNewList(5), due = wDueList(10).filter(w => !nw.includes(w));
+  return nw.map(w => ({ id: 'wi-' + w, t: 'wi', w })).concat(shuffle(nw.concat(due)).map(makeWQ));
+}
+/* 英文の単語をタップして意味を見る */
+const WORD_RE = /[A-Za-z]+(?:['’][A-Za-z]+)?/g;
+function armWords(root) {
+  if (!root) return;
+  const nodes = [], tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode(n) {
+    const p = n.parentElement;
+    return p && !p.closest('sub,.w,.defcard,.pos') && /[A-Za-z]/.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+  } });
+  while (tw.nextNode()) nodes.push(tw.currentNode);
+  nodes.forEach(n => {
+    const text = n.nodeValue, frag = document.createDocumentFragment(); let last = 0;
+    text.replace(WORD_RE, (m, i) => {
+      if (i > last) frag.append(text.slice(last, i));
+      const s = document.createElement('span'); s.className = 'w'; s.dataset.w = m; s.textContent = m; frag.append(s); last = i + m.length; return m;
+    });
+    if (last < text.length) frag.append(text.slice(last));
+    n.replaceWith(frag);
+  });
+}
+function armLesson() {
+  const b = $('#lbody'); if (!b) return;
+  $$('.qwin,.ersent,.ptext,.vword,.qtitle,.menu .opt > span:last-child,.wcard .wtap', b).forEach(armWords);
+  armWords($('#scr'));
+}
+function defHtml(raw) {
+  const r = DictCore.lookup(raw), lemma = r.lemma, info = lemma ? WMAP[lemma] : null, st = lemma ? S.words[lemma] : null;
+  let h = `<div class="dhead"><span class="dword">${esc(raw)}</span>${lemma && lemma !== String(raw).toLowerCase() ? `<span class="dlemma">原形：${esc(lemma)}</span>` : ''}
+${TTS.ok ? `<button class="spk" data-act="say" data-w="${esc(lemma || raw)}" aria-label="発音を聞く">${ic('speaker')}</button>` : ''}<button class="dclose" data-act="defclose" aria-label="とじる">${ic('x')}</button></div>`;
+  if (r.senses) {
+    h += r.senses.map(([pos, jp]) => `<div class="dsense"><span class="pos">${esc(POSLBL[pos] || pos)}</span><span>${esc(jp)}</span></div>`).join('');
+  } else {
+    h += `<p class="small" style="margin:6px 0">この単語は辞書にまだ入っておらん。${/^[A-Z]/.test(raw) ? '人名や地名かもしれんの。' : ''}<a href="https://ejje.weblio.jp/content/${encodeURIComponent(String(raw).toLowerCase())}" target="_blank" rel="noopener">Weblioで調べる</a></p>`;
+  }
+  if (info && info.syn) h += `<div class="dline"><b>類義語</b>　${esc(info.syn)}</div>`;
+  if (info && info.ex) h += `<div class="dline"><b>例文</b>　${esc(info.ex)}</div>`;
+  if (lemma && r.senses && !BASIC_W[lemma] && (info || CONTENT_POS[r.senses[0][0]])) {
+    if (st && st.b >= 0) h += `<div class="dadd">${pipsHtml(st)}<span>単語帳にあるぞい（${wLabel(st)}）</span></div>`;
+    else if (st) h += `<div class="dadd"><span>単語帳に入れてあるぞい。単語バトルで出るのじゃ</span></div>`;
+    else h += `<button class="btn sky dbtn" data-act="wadd" data-w="${esc(lemma)}">＋ 単語帳に入れる</button>`;
+  }
+  return h;
+}
+function renderDef(raw, block) {
+  const old = $('#defcard'); if (old) old.remove();
+  const card = document.createElement('div');
+  card.className = 'win defcard'; card.id = 'defcard'; card.setAttribute('aria-live', 'polite'); card.innerHTML = defHtml(raw);
+  block.after(card);
+  card.scrollIntoView({ block: 'nearest', behavior: REDUCED ? 'auto' : 'smooth' });
+}
+function showDef(wEl) {
+  $$('.w.sel').forEach(x => x.classList.remove('sel'));
+  wEl.classList.add('sel');
+  sfx('tap');
+  renderDef(wEl.dataset.w, wEl.closest('.qwin,.ersent,.passage,.menu,.script,.vword,.qtitle,.wcard') || wEl.parentElement);
+}
+const shortJp = jp => jp.split('；').slice(0, 2).join('；');
+function wrowHtml(o) {
+  const st = S.words[o.w];
+  return `<button class="wrow" data-wrow="${esc(o.w)}"><span class="wr-w">${esc(o.w)}</span><span class="pos">${esc(POSLBL[o.pos] || o.pos)}</span><span class="wr-jp">${esc(shortJp(o.jp))}</span>${pipsHtml(st)}</button>`;
+}
+function viewWordsTab() {
+  const s = wStats(), nNew = wNewList(5).length, nDue = Math.min(10, s.due), sess = nDue + nNew;
+  const line = s.due ? LINES.word.due(s.due) : nNew ? LINES.word.fresh : LINES.word.all;
+  const pct = k => (s.total ? s[k] / s.total * 100 : 0).toFixed(1);
+  let firstOpen = true;
+  const sets = WSETS.map(set => {
+    const got = set.list.filter(o => S.words[o.w] && S.words[o.w].b >= 1).length;
+    const open = firstOpen && got < set.list.length; if (open) firstOpen = false;
+    return `<details class="win wset" ${open ? 'open' : ''}><summary><span>${esc(set.name)}</span><span class="small">${got} / ${set.list.length}</span></summary><div class="wlist">${set.list.map(wrowHtml).join('')}</div></details>`;
+  }).join('');
+  const mine = Object.keys(S.words).filter(w => S.words[w].my && !WMAP[w]).map(w => winfo(w)).filter(Boolean);
+  return `<h1 class="page-h">単語 <small>頻出語をぞくぞく覚える</small></h1>
+<div class="npc" style="margin-top:14px">${toffee(s.due ? 'think' : 'joy')}<div class="bubble">${esc(line)}</div></div>
+<div class="win panel"><h3>覚えた単語</h3>
+<div class="stackbar" aria-hidden="true"><i class="m" style="width:${pct('mastered')}%"></i><i class="l" style="width:${pct('learning')}%"></i></div>
+<div class="stats"><div>マスター<b>${s.mastered}</b></div><div>学習中<b>${s.learning}</b></div><div>未学習<b>${s.fresh}</b></div><div>復習待ち<b>${s.due}</b></div></div>
+<button class="btn gold wide" style="margin-top:14px" data-act="wbattle" ${sess ? '' : 'disabled'}>▶ 単語バトル</button>
+<p class="small" style="margin:0 8px;text-align:center">復習 ${nDue}語 ・ 新しい単語 ${nNew}語</p>
+<p class="small" style="margin:2px 8px 0">忘れる頃に出題する「間隔反復」で、無理なく定着させます。1回約3分。</p></div>
+${mine.length ? `<div class="win panel"><h3>マイ単語</h3><p class="small" style="margin:0">タップして単語帳に入れた単語（${mine.length}語）</p><div class="wlist">${mine.map(wrowHtml).join('')}</div></div>` : ''}
+<h2 class="page-h" style="font-size:19px;margin-top:26px">単語ずかん</h2><p class="lead">タップすると意味・類義語・例文が見られます。</p>${sets}`;
+}
+
 /* ───────── 画面の骨組み ───────── */
 const app = $('#app'), layer = $('#layer');
 let tab = 'path', sub = null, selNode = null;
-const TABS = [['path', '冒険', 'sword'], ['review', '宿屋', 'redo'], ['guide', '図書館', 'scroll'], ['me', 'ステータス', 'chart']];
+const TABS = [['path', '冒険', 'sword'], ['words', '単語', 'cards'], ['review', '宿屋', 'redo'], ['guide', '図書館', 'scroll'], ['me', 'ステータス', 'chart']];
 function hpHtml(n) {
   if (S.set.inf) return `<span class="chip" style="color:var(--red)">${ic('heart')}∞</span>`;
   return `<span class="hp">${Array.from({ length: MAXH }, (_, i) => ic('heart', i < n ? '' : 'empty')).join('')}</span>`;
@@ -405,7 +582,8 @@ function render(scrollToCurrent) {
   refreshDaily();
   let body = '';
   if (tab === 'path') body = viewPath();
-  else if (tab === 'review') body = sub === 'words' ? viewWords() : viewReview();
+  else if (tab === 'words') body = viewWordsTab();
+  else if (tab === 'review') body = viewReview();
   else if (tab === 'guide') body = sub ? viewArticle(sub) : viewGuide();
   else body = viewMe();
   app.innerHTML = hud() + `<main class="gutter ${tab === 'path' ? 'with-sheet' : ''}">${body}</main>` + tabbar();
@@ -510,14 +688,9 @@ function viewReview() {
 <div class="list">
 <button class="win item sec-L" data-act="review" ${m ? '' : 'disabled'}><span class="icbox">${ic('heart')}</span><span><b>まちがいを倒す（${m}問）</b><small>やりきると HP+2</small></span><span class="chev">${ic('chev')}</span></button>
 <button class="win item sec-S" data-act="random" ${doneUnits.length ? '' : 'disabled'}><span class="icbox">${ic('dice')}</span><span><b>ランダム10問</b><small>${doneUnits.length ? 'これまでのワールドからシャッフル出題' : 'ワールドを1つ進めると使える'}</small></span><span class="chev">${ic('chev')}</span></button>
-<button class="win item sec-R" data-act="words"><span class="icbox">${ic('cards')}</span><span><b>単語ずかん</b><small>同義語ペアを一覧で確認</small></span><span class="chev">${ic('chev')}</span></button>
+<button class="win item sec-R" data-tab="words"><span class="icbox">${ic('cards')}</span><span><b>単語バトル</b><small>頻出単語を間隔をあけて復習する</small></span><span class="chev">${ic('chev')}</span></button>
 </div>
 <div class="win panel"><h3>ワールド別の正答率</h3>${rows.length ? rows.join('') + '<p class="small" style="margin-top:10px">低いワールドは、マップのステージをもう一度プレイしよう。</p>' : '<p class="small">問題を解くとここに表示されるよ。</p>'}</div>`;
-}
-function viewWords() {
-  const us = UNITS.filter(u => u.vocab);
-  return `<button class="back" data-act="back">${ic('back')}宿屋にもどる</button><h1 class="page-h">単語ずかん</h1><p class="lead">左の単語と右の同義語をペアで覚えよう。</p>` +
-    us.map(u => `<div class="win article"><h3 style="margin-top:0">${esc(WORLD[u.id])}</h3><table class="tbl"><tr><th>単語</th><th>同義語</th><th>意味</th></tr>${u.vocab.map(v => `<tr><td>${esc(v[0])}</td><td>${esc(v[2])}</td><td>${esc(v[6])}</td></tr>`).join('')}</table></div>`).join('');
 }
 
 /* ───────── 図書館（ガイド） ───────── */
@@ -606,12 +779,12 @@ function needHearts() {
   return true;
 }
 function startLesson(o) {
-  const free = o.kind === 'review';
+  const free = o.kind === 'review' || o.kind === 'words';
   if (!free && needHearts()) return;
   L = Object.assign({ queue: o.items.slice(), i: 0, total: o.items.length, solved: 0, firstC: 0, firstN: 0, seen: new Set(), combo: 0, free, played: new Set(), t0: Date.now(), seeds: 0,
-    xpBase: { practice: 10, check: 15, mock: 20, review: 10, random: 10 }[o.kind] || 10 }, o);
+    xpBase: { practice: 10, check: 15, mock: 20, review: 10, random: 10, words: 8 }[o.kind] || 10 }, o);
   stopSpeak(); sfx('start');
-  const sec = o.unit ? o.unit.sec : 'L';
+  const sec = o.unit ? o.unit.sec : (o.kind === 'words' ? 'R' : 'L');
   layer.innerHTML = `<div class="overlay sec-${sec}" id="lesson"><div class="inner gutter">
 <div class="lhead"><button class="xbtn" data-act="quit" aria-label="にげる">${ic('x')}</button><div class="prog" id="prog"></div><span id="lh">${hpHtml(S.hearts)}</span></div>
 <div class="lbody" id="lbody"></div></div><div class="lfoot" id="lfoot"><div class="inner gutter" style="max-width:640px;margin:0 auto"></div></div></div>`;
@@ -672,9 +845,36 @@ ${TTS.ok ? '' : `<div class="script">${scriptHtml(q)}</div>`}
     L.pr = { left: null, right: null, done: 0, err: 0 };
     h = `<span class="qtag">PAIR MATCH</span><p class="qtitle">同じ意味のペアをそろえよう</p>
 <div class="pairs"><div class="colp">${left.map(([i, w]) => `<button class="pbtn" data-pl="${i}">${esc(w)}</button>`).join('')}</div><div class="colp">${right.map(([i, w]) => `<button class="pbtn" data-pr="${i}">${esc(w)}</button>`).join('')}</div></div>`;
+  } else if (q.t === 'wi') {
+    const info = winfo(q.w); wTouch(q.w); save();
+    const stem = q.w.slice(0, Math.max(3, q.w.length - 2)).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const ex = info.ex ? esc(info.ex).replace(new RegExp('\\b(' + stem + '\\w*)', 'i'), '<span class="hl">$1</span>') : '';
+    h = `<span class="qtag">NEW WORD</span>
+<div class="win wcard"><div class="vword wtap">${esc(q.w)}</div>
+<div class="wmeta"><span class="pos">${esc(POSLBL[info.pos] || info.pos)}</span>${TTS.ok ? `<button class="spk" data-act="say" data-w="${esc(q.w)}" aria-label="発音を聞く">${ic('speaker')}</button>` : ''}</div>
+<p class="wjp">${esc(info.jp)}</p>
+${info.syn ? `<p class="wsyn"><b>類義語</b>　<span class="wtap">${esc(info.syn)}</span></p>` : ''}
+${ex ? `<p class="wex wtap">${ex}</p>` : ''}</div>
+<div class="npc" style="margin:10px 4px 0">${toffee('idle')}<div class="bubble">${esc(pick(LINES.word.intro))}</div></div>`;
+  } else if (q.t === 'wq') {
+    const info = winfo(q.w);
+    if (q.f === 'jp') {
+      h = `<span class="qtag">WORD</span><div class="vword">${esc(q.w)}</div><p class="qtitle" style="font-size:16px;margin-top:4px">この単語の意味は？<small class="small">（${esc(POSLBL[info.pos] || info.pos)}）</small></p>${menu()}`;
+    } else if (q.f === 'en') {
+      h = `<span class="qtag">WORD</span><p class="qtitle">「${esc(info.jp)}」（${esc(POSLBL[info.pos] || info.pos)}）を表す英単語は？</p>${menu()}`;
+    } else {
+      const stem = q.w.slice(0, Math.max(3, q.w.length - 2)).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const ex = esc(q.ex).replace(new RegExp('\\b(' + stem + '\\w*)', 'i'), '<span class="hl">$1</span>');
+      h = `<span class="qtag">WORD</span><div class="win qwin" style="font-size:17px">${ex}</div><p class="qtitle" style="font-size:16px">The word "${esc(q.w)}" is closest in meaning to …</p>${menu()}`;
+    }
   }
   b.innerHTML = h; b.scrollTop = 0;
   if (q.t === 'rd') { const mk = $('#hlmark'); if (mk) { const box = mk.closest('.ptext'); box.scrollTop = Math.max(0, mk.offsetTop - box.offsetTop - 60); } }
+  if (q.t === 'wi') {
+    L.answered = true; armLesson();
+    foot(`<button class="btn gold wide" data-act="next" id="nextbtn">▶ おぼえた！テストへ</button>`);
+    return;
+  }
   foot(q.t === 'pr' ? `<button class="btn wide" disabled>ペアをすべてそろえよう</button>` : `<button class="btn gold wide" id="checkbtn" data-act="check" disabled>▶ けってい</button>`);
   if ((q.t === 'ls' || (q.t === 'lt' && !L.played.has(q.ctx))) && TTS.ok) setTimeout(() => { if (L && L.cur === q && !L.answered) play(1); }, 450);
 }
@@ -704,7 +904,7 @@ function record(q, ok) {
   L.seen.add(q.id);
   L.firstN++; if (ok) { L.firstC++; L.seeds++; S.seeds++; }
   const sec = secOf(q);
-  if (sec && q.t !== 'pr') { const a = S.stats[sec]; a.push(ok ? 1 : 0); if (a.length > 80) a.shift(); }
+  if (sec && q.t !== 'pr' && q.t !== 'wq') { const a = S.stats[sec]; a.push(ok ? 1 : 0); if (a.length > 80) a.shift(); }
   if (q.unit) { const ua = S.ua[q.unit] || (S.ua[q.unit] = [0, 0]); ua[1]++; if (ok) ua[0]++; }
 }
 function check() {
@@ -721,12 +921,14 @@ function check() {
     const right = L.order.indexOf(0);
     ok = L.sel === right;
     const opts = $$('#lbody [data-opt]');
-    opts.forEach(x => x.disabled = true);
+    opts.forEach(x => x.setAttribute('aria-disabled', 'true'));
     opts[right].classList.add('ok'); if (!ok) opts[L.sel].classList.add('ng');
     if (q.t === 'fb') { const bl = $('#blank'); if (bl) bl.textContent = q.o[0]; }
     ansText = `正解は (${LET[right]}) ${esc(q.o[0])}`;
   }
+  const firstTry = !L.seen.has(q.id);
   record(q, ok);
+  if (q.t === 'wq' && firstTry) wResult(q.w, ok);
   if (!L.free && !ok && !S.mist.includes(q.id)) { S.mist.push(q.id); if (S.mist.length > 300) S.mist.shift(); }
   if (L.kind === 'review') { S.mist = S.mist.filter(x => x !== q.id); if (!ok) S.mist.push(q.id); }
   let line;
@@ -743,17 +945,20 @@ function check() {
   }
   save(); setProg();
   const extra = q.t === 'vc' ? `<div>${esc(q.w)} ＝ ${esc(q.o[0])}（${esc(q.jp)}）</div>` : '';
+  const tapHint = ['fb', 'er', 'vc', 'rd', 'ls', 'lt'].includes(q.t) || (q.t === 'wq' && q.f !== 'jp') ? '<div class="small taphint">英文の単語をタップすると、意味と品詞が見られるぞい</div>' : '';
   const scr = (q.t === 'ls' || q.t === 'lt') && TTS.ok ? `<button class="linkbtn" data-act="script">スクリプトを見る</button><div class="script" id="scr" hidden>${scriptHtml(q)}</div>` : '';
   foot(`<div class="dlg">${toffee(ok ? 'eat' : 'wow')}<div style="min-width:0"><div class="who">TOFFEE</div><p class="line" id="say"></p></div></div>
-<div class="fb-body">${ok && q.t !== 'er' ? '' : `<div class="ans">${ansText}</div>`}${extra}<div class="exp">${q.e ? esc(q.e) : ''}</div>${scr}${!ok ? '<div class="small" style="margin-top:4px">この問題は、あとでもう一度出てくるぞい</div>' : ''}</div>
+<div class="fb-body">${ok && q.t !== 'er' ? '' : `<div class="ans">${ansText}</div>`}${extra}<div class="exp">${q.e ? esc(q.e) : ''}</div>${scr}${!ok ? '<div class="small" style="margin-top:4px">この問題は、あとでもう一度出てくるぞい</div>' : ''}${tapHint}</div>
 <button class="btn wide ${ok ? '' : 'red'}" data-act="next" id="nextbtn">▶ つぎへ</button>`, ok ? 'ok' : 'ng');
   typeInto($('#say'), line);
+  armLesson();
   const nb = $('#nextbtn'); if (nb) nb.focus({ preventScroll: true });
 }
 function toast(t) { const c = document.createElement('div'); c.className = 'toast'; c.textContent = t; document.body.appendChild(c); setTimeout(() => c.remove(), 1300); }
 function next() {
   stopSpeak(); clearInterval(typeTimer);
   if (!L.free && !S.set.inf && S.hearts <= 0) return failLesson();
+  if (L.cur && L.cur.t === 'wi') L.solved++;
   L.i++; showQ();
 }
 function pairTap(side, i, btn) {
@@ -787,8 +992,8 @@ function finishLesson() {
   const lvAfter = levelOf(S.xp).lv;
   save();
   const goalHit = before < S.goal && todayXP() >= S.goal;
-  const title = L.kind === 'review' ? 'REST<br>COMPLETE' : perfect ? 'PERFECT!' : 'STAGE<br>CLEAR!';
-  const msg = L.kind === 'review' ? '宿屋でひと休みじゃ。HPが2戻ったぞい' : perfect ? LINES.result.perfect : acc >= .8 ? LINES.result.good : acc >= .6 ? LINES.result.ok : LINES.result.low;
+  const title = L.kind === 'review' ? 'REST<br>COMPLETE' : L.kind === 'words' ? (perfect ? 'PERFECT!' : 'WORD<br>CLEAR!') : perfect ? 'PERFECT!' : 'STAGE<br>CLEAR!';
+  const msg = L.kind === 'review' ? '宿屋でひと休みじゃ。HPが2戻ったぞい' : L.kind === 'words' ? pick(LINES.word.clear) : perfect ? LINES.result.perfect : acc >= .8 ? LINES.result.good : acc >= .6 ? LINES.result.ok : LINES.result.low;
   const sub = goalHit ? '今日の目標を果たしたのう。あっぱれじゃ' : newStreak ? `連続 ${S.streak}日目じゃ。続ける者がいちばん強い` : '';
   const mins = Math.max(1, Math.round((Date.now() - L.t0) / 60000));
   const seeds = L.seeds, isReview = L.kind === 'review', hasNode = !!L.node;
@@ -877,6 +1082,15 @@ function onboarding() {
 
 /* ───────── イベント ───────── */
 document.addEventListener('click', e => {
+  const wEl = e.target.closest('.w');
+  if (wEl) { showDef(wEl); return; }
+  const rowEl = e.target.closest('[data-wrow]');
+  if (rowEl) {
+    const on = rowEl.classList.contains('sel');
+    $$('.wrow.sel').forEach(x => x.classList.remove('sel')); const old = $('#defcard'); if (old) old.remove();
+    if (!on) { rowEl.classList.add('sel'); sfx('tap'); renderDef(rowEl.dataset.wrow, rowEl); }
+    return;
+  }
   const t = e.target.closest('button,[data-seg],[data-act],.sheet,.modal');
   if (!t) { if ($('.sheet') && selNode) { selNode = null; closeLayer(); render(); } return; }
   if ($('.sheet') && !t.closest('.sheet') && !t.dataset.node && selNode) { selNode = null; }
@@ -918,7 +1132,18 @@ document.addEventListener('click', e => {
       startLesson({ node: null, unit: null, kind: 'random', items: sample(pool, 10).map(id => Q[id]) });
       return;
     }
-    case 'words': sub = 'words'; render('top'); return;
+    case 'wbattle': {
+      const items = wordSession(); if (!items.length) return;
+      closeLayer(); startLesson({ node: null, unit: null, kind: 'words', items });
+      return;
+    }
+    case 'wadd': {
+      wTouch(d.w, true); save(); sfx('loot');
+      t.outerHTML = '<div class="dadd"><span>単語帳に入れたぞい。単語バトルで出るようになる</span></div>';
+      return;
+    }
+    case 'say': speak([['N', d.w]], 0.85); return;
+    case 'defclose': { const c = $('#defcard'); if (c) c.remove(); $$('.w.sel,.wrow.sel').forEach(x => x.classList.remove('sel')); return; }
     case 'back': sub = null; render('top'); return;
     case 'check': check(); return;
     case 'next': next(); return;

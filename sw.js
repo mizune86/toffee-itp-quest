@@ -1,10 +1,17 @@
-const CACHE = 'toffee-itp-v3';
+const CACHE = 'toffee-itp-v4';
 const CORE = [
   './',
   'index.html',
   'app.js',
   'data.js',
   'boss.js',
+  'dict1.js',
+  'dict2.js',
+  'dict3.js',
+  'dict4.js',
+  'dict5.js',
+  'dictcore.js',
+  'words.js',
   'sprites.js',
   'manifest.webmanifest',
   'icons/apple-touch-icon.png',

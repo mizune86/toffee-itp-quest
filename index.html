@@ -135,8 +135,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 
 /* ---- メニュー（タブ） ---- */
 .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:35;background:var(--shade);border-top:3px solid var(--bd);padding-bottom:env(safe-area-inset-bottom,0px)}
-.tabbar .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
-.tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 9px;font-size:12px;color:var(--dim)}
+.tabbar .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
+.tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 9px;font-size:11px;color:var(--dim);min-width:0;white-space:nowrap}
 .tab .ic{width:26px;height:26px}
 .tab[aria-selected="true"]{color:var(--gold)}
 .tab[aria-selected="true"] span::before{content:"▶";font-size:9px;margin-right:3px}
@@ -230,7 +230,51 @@ b{font-weight:400;color:var(--gold)}
 .opt[aria-pressed="true"]::before{visibility:visible;animation:blink .6s steps(2,start) infinite}
 .opt.ok{box-shadow:0 0 0 3px var(--shade),0 0 0 5px var(--ok);background:#1F4A3A}
 .opt.ng{box-shadow:0 0 0 3px var(--shade),0 0 0 5px var(--red);background:#4A1F33}
-.opt[disabled]{cursor:default}
+.opt[disabled],.opt[aria-disabled]{cursor:default}
+/* 単語タップ・辞書カード */
+.w{cursor:pointer;border-bottom:2px dotted var(--dim)}
+.w:hover{background:rgba(255,212,71,.2)}
+.w.sel{background:var(--gold);color:#1A1033;border-bottom-color:var(--gold)}
+.defcard{margin:12px 9px;padding:10px 12px;font-size:15px;animation:rise .14s steps(3);text-align:left}
+.dhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dword{font-family:var(--f8);font-size:14px;color:var(--gold);overflow-wrap:anywhere;line-height:1.6}
+.dlemma{font-size:12px;color:var(--muted)}
+.spk{width:34px;height:34px;display:grid;place-items:center;flex:none;background:var(--R);color:#1A1033;box-shadow:inset -3px -3px 0 rgba(0,0,0,.25),0 0 0 2px var(--shade)}
+.spk .ic{width:18px;height:18px}
+.dclose{margin-left:auto;width:34px;height:34px;display:grid;place-items:center;color:var(--muted);flex:none}
+.dclose .ic{width:18px;height:18px}
+.dsense{display:flex;gap:8px;align-items:baseline;margin-top:6px;line-height:1.5}
+.pos{flex:none;font-size:11px;line-height:1.5;background:var(--win2);box-shadow:0 0 0 2px var(--dim);padding:0 6px;color:var(--R);white-space:nowrap}
+.dline{font-size:13px;margin-top:6px;line-height:1.55;overflow-wrap:anywhere}
+.dline b{color:var(--gold)}
+.dadd{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--muted)}
+.dbtn{min-height:42px;font-size:15px;margin-top:8px;margin-bottom:4px}
+.taphint{margin-top:4px}
+/* 単語の学習 */
+.pips{display:inline-flex;gap:2px;flex:none}
+.pips i{width:8px;height:8px;background:var(--stone)}
+.pips i.on{background:var(--ok)}
+.wcard{padding:16px;margin:9px 9px 6px;text-align:center}
+.wcard .vword{font-size:24px;margin-top:2px}
+.wmeta{display:flex;justify-content:center;gap:10px;align-items:center;margin:8px 0 4px}
+.wjp{font-size:20px;margin:6px 0;line-height:1.5}
+.wsyn,.wex{font-size:14px;text-align:left;margin:8px 0 0;line-height:1.7}
+.wex{background:var(--shade);padding:8px 10px;box-shadow:0 0 0 2px var(--dim)}
+.wset{padding:0;margin:14px 9px}
+.wset summary{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;list-style:none;font-size:16px}
+.wset summary::-webkit-details-marker{display:none}
+.wset summary::before{content:"▶";font-size:10px;color:var(--gold)}
+.wset[open] summary::before{content:"▼"}
+.wset summary span:first-of-type{flex:1;min-width:0}
+.wlist{display:flex;flex-direction:column;padding:0 6px 8px}
+.wrow{display:flex;align-items:center;gap:8px;padding:9px 8px;text-align:left;border-top:2px dotted var(--dim);width:100%}
+.wr-w{font-size:15px;min-width:92px;flex:none;overflow-wrap:anywhere}
+.wr-jp{flex:1;min-width:0;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wrow.sel{background:var(--win2)}
+.stackbar{height:14px;background:var(--stoned);box-shadow:0 0 0 2px var(--dim);display:flex;padding:2px;margin:6px 0 10px}
+.stackbar i{display:block;height:100%}
+.stackbar .m{background:var(--gold)}
+.stackbar .l{background:var(--ok)}
 .ersent{padding:14px 16px;font-size:19px;line-height:2.7;margin:9px 9px 14px}
 .seg-u{position:relative;display:inline;border-bottom:3px solid var(--ink);padding:2px 3px;cursor:pointer;margin:0 1px}
 .seg-u sub{position:relative;bottom:-1.5em;font-family:var(--f8);font-size:8px;color:var(--muted);margin-left:2px}
@@ -319,4 +363,11 @@ canvas.confetti{position:fixed;inset:0;pointer-events:none;z-index:90;image-rend
 <script src="sprites.js"></script>
 <script src="data.js"></script>
 <script src="boss.js"></script>
+<script src="dict1.js"></script>
+<script src="dict2.js"></script>
+<script src="dict3.js"></script>
+<script src="dict4.js"></script>
+<script src="dict5.js"></script>
+<script src="dictcore.js"></script>
+<script src="words.js"></script>
 <script src="app.js"></script>
