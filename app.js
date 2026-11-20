@@ -216,35 +216,39 @@ ${CLOUD.err ? `<p class="small" style="color:var(--red);margin:0 0 8px">${esc(CL
 }
 
 /* ───────── 問題バンクとステージ ───────── */
-const Q = {}, CTX = {};
+const Q = {}, CTX = {}, BOSS = window.BOSS || {};
+function addVocab(u, v, id, tgt, boss) {
+  Q[id] = { id, t: 'vc', w: v[0], s: v[1], o: v.slice(2, 6), jp: v[6], sec: 'R', unit: u.id, boss };
+  tgt.pool.push(id); (boss ? tgt.solo : tgt.vocabIds).push(id);
+}
+function addItem(u, r, base, tgt, boss) {
+  if (Array.isArray(r)) {
+    let q;
+    if (r[0] === 'fb') q = { t: 'fb', q: r[1], o: r[2], e: r[3] };
+    else if (r[0] === 'er') q = { t: 'er', q: r[1], a: r[2], fix: r[3], e: r[4] };
+    else if (r[0] === 'mc') q = { t: 'mc', q: r[1], o: r[2], e: r[3] };
+    else q = { t: 'ls', d: r[1], q: r[2], o: r[3], e: r[4] };
+    Object.assign(q, { id: base, sec: u.sec, unit: u.id, boss });
+    Q[base] = q; tgt.pool.push(base); tgt.solo.push(base);
+  } else {
+    CTX[base] = { t: r.t, title: r.title, p: r.p, d: r.d };
+    const g = [];
+    r.qs.forEach((s, j) => {
+      const id = `${base}-${j}`;
+      Q[id] = { id, t: r.t, ctx: base, q: s[0], o: s[1], e: s[2], hl: s[3] || '', sec: u.sec, unit: u.id, boss };
+      tgt.pool.push(id); g.push(id);
+    });
+    tgt.groups.push(g);
+  }
+}
 UNITS.forEach((u, ui) => {
   u.idx = ui; u.pool = []; u.vocabIds = []; u.groups = []; u.solo = [];
-  (u.vocab || []).forEach((v, i) => {
-    const id = `${u.id}-v${i}`;
-    Q[id] = { id, t: 'vc', w: v[0], s: v[1], o: v.slice(2, 6), jp: v[6], sec: 'R', unit: u.id };
-    u.pool.push(id); u.vocabIds.push(id);
-  });
-  (u.qs || []).forEach((r, i) => {
-    const base = `${u.id}-${i}`;
-    if (Array.isArray(r)) {
-      let q;
-      if (r[0] === 'fb') q = { t: 'fb', q: r[1], o: r[2], e: r[3] };
-      else if (r[0] === 'er') q = { t: 'er', q: r[1], a: r[2], fix: r[3], e: r[4] };
-      else if (r[0] === 'mc') q = { t: 'mc', q: r[1], o: r[2], e: r[3] };
-      else q = { t: 'ls', d: r[1], q: r[2], o: r[3], e: r[4] };
-      Object.assign(q, { id: base, sec: u.sec, unit: u.id });
-      Q[base] = q; u.pool.push(base); u.solo.push(base);
-    } else {
-      CTX[base] = { t: r.t, title: r.title, p: r.p, d: r.d };
-      const g = [];
-      r.qs.forEach((s, j) => {
-        const id = `${base}-${j}`;
-        Q[id] = { id, t: r.t, ctx: base, q: s[0], o: s[1], e: s[2], hl: s[3] || '', sec: u.sec, unit: u.id };
-        u.pool.push(id); g.push(id);
-      });
-      u.groups.push(g);
-    }
-  });
+  (u.vocab || []).forEach((v, i) => addVocab(u, v, `${u.id}-v${i}`, u, false));
+  (u.qs || []).forEach((r, i) => addItem(u, r, `${u.id}-${i}`, u, false));
+  const b = BOSS[u.id] || {};
+  u.boss = { pool: [], solo: [], groups: [] };
+  (b.vocab || []).forEach((v, i) => addVocab(u, v, `${u.id}-bv${i}`, u.boss, true));
+  (b.qs || []).forEach((r, i) => addItem(u, r, `${u.id}-b${i}`, u.boss, true));
   u.lessons = buildLessons(u);
   u.nodes = [];
   if (u.learn) u.nodes.push({ id: `${u.id}-learn`, kind: 'learn', unit: u, title: '作戦の巻物' });
@@ -287,14 +291,22 @@ function lessonItems(node) {
   const u = node.unit;
   if (node.kind === 'practice') return node.items.map(id => id === 'PAIR' ? makePair(node.items) : Q[id]);
   if (node.kind === 'check') {
-    const own = sample(u.pool.filter(standalone), 8);
-    const prev = UNITS.slice(1, u.idx).flatMap(x => x.pool.filter(id => standalone(id) && Q[id].t !== 'mc'));
-    const ids = own.concat(sample(prev, 2));
-    if (u.groups.length) ids.push(...sample(u.groups.flat(), 2));
-    return shuffle(ids).map(id => Q[id]);
+    const src = x => x.boss.pool.length ? x.boss : { solo: x.pool.filter(standalone), groups: x.groups };
+    const B = src(u);
+    const own = sample(B.solo, 8);
+    const prev = UNITS.slice(1, u.idx).flatMap(x => src(x).solo.filter(id => Q[id].t !== 'mc'));
+    const head = shuffle(own.concat(sample(prev, 2)));
+    let tail = [];
+    if (B.groups.length) {
+      const g = pick(B.groups), n = Math.min(g.length, Math.max(3, 10 - head.length));
+      const keep = new Set(sample(g, n));
+      tail = g.filter(id => keep.has(id));
+    }
+    return head.concat(tail).map(id => Q[id]);
   }
   if (node.kind === 'mock') {
-    const all = Object.values(Q);
+    const bossAll = Object.values(Q).filter(q => q.boss);
+    const all = bossAll.length ? bossAll : Object.values(Q);
     const Lq = sample(all.filter(q => q.t === 'ls'), 5);
     const Sq = sample(all.filter(q => q.t === 'fb'), 2).concat(sample(all.filter(q => q.t === 'er'), 4));
     const Rq = sample(all.filter(q => q.t === 'vc'), 3).concat(sample(all.filter(q => q.t === 'rd'), 2));
@@ -464,10 +476,10 @@ function sheetLine(n) {
 }
 function openSheet(n) {
   const u = n.unit, open = isOpen(n), done = isDone(n), cur = currentNode();
-  const cnt = n.kind === 'practice' ? n.items.length : n.kind === 'check' ? (u.groups.length ? 12 : 10) : n.kind === 'mock' ? 15 : u.learn.length;
+  const cnt = n.kind === 'practice' ? n.items.length : n.kind === 'check' ? (u.boss.groups.length ? 10 : Math.min(10, u.boss.solo.length + 2)) : n.kind === 'mock' ? 15 : u.learn.length;
   const desc = !open ? 'ひとつ前のステージをクリアすると開放' :
     n.kind === 'learn' ? `巻物${cnt}枚 ・ 解き方と考え方` :
-      n.kind === 'check' ? `${cnt}問 ・ このワールドの総まとめ＋前のワールドの復習` :
+      n.kind === 'check' ? `約${cnt}問 ・ レッスンとはちがうボス専用問題＋前のワールドの復習` :
         n.kind === 'mock' ? `${cnt}問 ・ リスニング→文法→読解の本番順` : `${cnt}問 ・ まちがえた問題は最後にもう一度出る`;
   const xp = n.kind === 'learn' ? 5 : n.kind === 'check' ? 15 : n.kind === 'mock' ? 20 : 10;
   const mood = !open ? 'think' : done ? 'joy' : 'idle';

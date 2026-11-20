@@ -4,6 +4,7 @@ const CORE = [
   'index.html',
   'app.js',
   'data.js',
+  'boss.js',
   'sprites.js',
   'manifest.webmanifest',
   'icons/apple-touch-icon.png',
