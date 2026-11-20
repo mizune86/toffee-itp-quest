@@ -814,3 +814,195 @@ window.SCALE = {
   L:{n:50,pts:[[0,31],[8,31],[10,33],[13,37],[16,41],[19,44],[22,46],[25,48],[28,50],[31,52],[34,54],[37,56],[40,58],[43,61],[46,64],[48,66],[50,68]]},
   R:{n:50,pts:[[0,31],[8,31],[10,33],[13,37],[16,41],[19,44],[22,46],[25,48],[28,50],[31,52],[34,54],[37,56],[40,58],[43,60],[46,63],[48,65],[50,67]]}
 };
+
+/* ───────── 文法強化パック：既存ユニットへの追加問題＋新ユニット3つ ───────── */
+(function () {
+  const U = window.UNITS, byId = id => U.find(u => u.id === id);
+  const ADD = {
+    u1: [
+      ['fb','Most of the world\'s fresh water ___ frozen in glaciers and ice caps.',['is','being','to be','which is'],'主語 Most of the world\'s fresh water に対する動詞が必要。water は不可算なので is。'],
+      ['fb','___ by the Romans, the city of London was originally called Londinium.',['Founded','It was founded','Founding','Was founded'],'主節があるので分詞構文。ロンドンは「建設された」側 → 過去分詞 Founded。'],
+      ['fb','The Mississippi River, ___ flows south to the Gulf of Mexico, is one of the longest rivers in North America.',['which','it','that it','and'],'主節の動詞は is。挿入部分には関係代名詞 which ＋ 動詞 flows。'],
+      ['fb','___ that the Earth revolves around the Sun was proposed by Copernicus.',['The idea','That the idea','Because the idea','It was the idea'],'主語が必要。The idea that …（〜という考え）が主語、was proposed が動詞。'],
+      ['fb','In the deep ocean ___ creatures that produce their own light.',['live','living','to live','lives'],'場所の句が文頭の倒置。主語は creatures（複数）なので live。'],
+      ['er','The ancient Egyptians who {building} the pyramids {used} {simple} {tools}.',0,'built','関係詞節 who ___ the pyramids の中に動詞が必要。building → built。'],
+      ['er','Thomas Edison, {one of} the most famous {inventors}, {he} held more than 1,000 {patents}.',2,'（he を削除）','主語 Thomas Edison があるので he は重複。'],
+      ['er','The roots of a tree {absorbing} water {and} nutrients {from} the {soil}.',0,'absorb','主語 The roots に対する述語動詞がない。absorbing → absorb。']
+    ],
+    u2: [
+      ['er','The quality of the photographs {in} the exhibit {are} {remarkably} {high}.',1,'is','主語は quality（単数）。of 以下は修飾語。'],
+      ['er','Mathematics {have} {long} been {considered} {a} universal language.',0,'has','mathematics は -s で終わるが単数扱い。'],
+      ['fb','Either the students or the teacher ___ responsible for cleaning the lab.',['is','are','be','being'],'either A or B は B（the teacher・単数）に合わせる。'],
+      ['er','There {is} {several} reasons {why} {bees} are disappearing.',0,'are','There ＋ be ＋ 主語。主語は several reasons（複数）。'],
+      ['fb','Most of the information on these websites ___ outdated.',['is','are','were','have'],'most of ＋ 名詞 は名詞に合わせる。information は不可算 → is。'],
+      ['er','The data collected by the satellite show that the ice {are} {melting} {faster} than {expected}.',0,'is','that節の主語は the ice（不可算・単数）なので is。'],
+      ['fb','Each of the paintings in the museum ___ a label describing its history.',['has','have','having','are'],'each of ～ は単数扱い → has。'],
+      ['er','A herd of elephants {were} {seen} {near} the {river}.',0,'was','主語は A herd（群れ・単数）。of elephants は修飾語。']
+    ],
+    u4: [
+      ['er','The volunteers cleaned the beach, {planted} trees, and {they painted} the {old} {fence}.',1,'painted','cleaned, planted と過去形の動詞が並ぶ。they は不要。'],
+      ['fb','The course teaches students how to read critically, write clearly, and ___.',['speak confidently','speaking confidently','confident speech','to speaking confidently'],'read …, write … と動詞の原形＋副詞が並ぶ。'],
+      ['er','The museum is open {not only} on weekdays {but also} {in} {weekends}.',2,'on','not only on weekdays but also on weekends と形をそろえる。'],
+      ['er','The professor asked us {to read} the article, {summarize} it, and {writing} a {short} response.',2,'write','to read, summarize, write と動詞の原形でそろえる。'],
+      ['fb','The new library is larger, brighter, and ___ the old one.',['more comfortable than','comfortable than','more comfort than','most comfortable than'],'larger, brighter と比較級が並ぶ。comfortable の比較級は more comfortable。'],
+      ['er','The trip was {both} {expensive} {or} {tiring}.',2,'and','both A and B のペア。'],
+      ['fb','Recycling saves energy, reduces waste, and ___.',['protects natural resources','protecting natural resources','protection of natural resources','it protects natural resources'],'saves, reduces と現在形の動詞が並ぶ。'],
+      ['mc','not only A but also B で、A と B の関係として正しいのは？',['同じ品詞・同じ形にそろえる','A は名詞、B は動詞にする','B だけ過去形にする','A と B は必ず1語'],'ペア接続詞でつなぐ2つは、並列と同じく形をそろえるのがルール。']
+    ],
+    u5: [
+      ['er','The invention of the steam engine {great} {changed} {transportation} {forever}.',0,'greatly','動詞 changed を修飾するのは副詞 greatly。'],
+      ['er','Her {explanation} of the theory was {clear}, {concise}, and {logic}.',3,'logical','clear, concise と形容詞が並ぶ → logical。'],
+      ['fb','Scientists were surprised by the ___ of the results.',['accuracy','accurate','accurately','accurateness'],'the ___ of … の位置は名詞。'],
+      ['er','Sea turtles {return} {regular} to the beaches {where} they {hatched}.',1,'regularly','動詞 return を修飾するので副詞。'],
+      ['er','The {govern} of the colony {was} {controlled} by {Britain}.',0,'government','The ___ of … の位置は名詞。'],
+      ['fb','Dolphins are known for their ___.',['intelligence','intelligent','intelligently','intelligible'],'their の後ろは名詞。'],
+      ['er','The {medical} profession {requires} {years} of {intensively} training.',3,'intensive','名詞 training を修飾するので形容詞。'],
+      ['er','It is {important} to {protect} {endanger} {species}.',2,'endangered','名詞 species を修飾する形容詞（過去分詞）endangered「絶滅の危機にある」。']
+    ],
+    u7: [
+      ['fb','The Great Wall of China, ___ stretches thousands of kilometers, was built over many centuries.',['which','that','what','where'],'カンマの後ろなので that は不可。主語の働きをする which。'],
+      ['fb','The town ___ the battle took place is now a popular tourist site.',['where','which','what','whose'],'the battle took place は完全な文 → 関係副詞 where。'],
+      ['er','{Because of} the road {was} closed, we {took} a {different} route.',0,'Because','後ろが節（the road was closed）なので接続詞 Because。'],
+      ['fb','Students ___ attend every class usually perform better on exams.',['who','which','whose','what'],'先行詞は Students（人）で、後ろに主語が欠けている → who。'],
+      ['er','The scientist {whom} {discovered} penicillin {was} Alexander {Fleming}.',0,'who','後ろに主語が欠けているので主格 who。whom は目的格。'],
+      ['fb','___ the experiment failed, the researchers learned a great deal.',['Even though','Because','In spite of','Due to'],'後ろは節で、内容は逆接（失敗したけれど学んだ）→ Even though。'],
+      ['er','The year {which} the war ended, {my} grandfather {was} {born}.',0,'in which（when）','the war ended は完全な文。時を表す関係副詞 when／in which。'],
+      ['fb','The museum will close early ___ the holiday.',['because of','because','although','while'],'後ろは名詞 the holiday → 前置詞 because of。']
+    ],
+    u9: [
+      ['er','She gave me {some} {useful} {informations} {about} the course.',2,'information','information は不可算名詞。-s はつかない。'],
+      ['er','Mount Everest is {highest} {mountain} {in} the {world}.',0,'the highest','最上級には the が必要。'],
+      ['fb','There are ___ people in the room than yesterday.',['fewer','less','little','much'],'people は可算名詞の複数 → fewer。less は不可算名詞に使う。'],
+      ['er','The library bought {several} new {equipments} {for} the {lab}.',1,'pieces of equipment','equipment は不可算。数えるなら pieces of equipment。'],
+      ['fb','Learning a language takes ___.',['a great deal of practice','many practices','a great many practice','a number of practice'],'practice（練習）はここでは不可算 → a great deal of。'],
+      ['er','He wants to become {an} {engineer} and {a} {honest} leader.',2,'an','honest は母音の音（オ）で始まるので an。'],
+      ['fb','Each species has adapted to ___ environment.',['its own','their own','it own','his own'],'each species は単数 → its own。'],
+      ['er','Many {kind} of {birds} {migrate} south {in} winter.',0,'kinds','many の後ろは複数形 kinds。']
+    ],
+    u10: [
+      ['er','Gold is {more heavier} than {silver}, {and} it {is} also rarer.',0,'heavier','heavier だけで比較級。more と重ねない。'],
+      ['fb','The Pacific Ocean is ___ the Atlantic Ocean.',['larger than','largest than','more larger than','large as'],'比較級 ＋ than。'],
+      ['er','This method is {as} {effective} {than} the {old} one.',2,'as','as ～ as の同等比較。than は使わない。'],
+      ['fb','The more carefully you read, ___ you will understand.',['the more','more','the most','most'],'The 比較級 …, the 比較級 … の形。'],
+      ['er','Her score was higher than {any} {student} {in} the {class}.',0,'any other','同じグループ内で比べるときは any other ＋ 単数名詞。'],
+      ['fb','This is ___ book I have ever read.',['the most interesting','more interesting','most interesting than','the more interesting'],'I have ever read と組む最上級。'],
+      ['er','The {climate} of Hawaii is {much} {warmer} than {Alaska}.',3,'that of Alaska','比べるのは「気候」同士。that of Alaska。'],
+      ['fb','Lake Baikal is ___ lake in the world.',['the deepest','deeper','the deeper','most deep'],'in the world と組む最上級。バイカル湖は世界一深い湖。']
+    ],
+    u12: [
+      ['er','The bridge {was} {build} {in} {1937}.',1,'built','受動態は be ＋ 過去分詞。build – built – built。'],
+      ['fb','She has lived in Tokyo ___ ten years.',['for','since','during','while'],'現在完了 ＋ for ＋ 期間。since の後ろは起点（2015 など）。'],
+      ['er','He {suggested} {to go} to the {museum} {together}.',1,'going','suggest は -ing をとる動詞。'],
+      ['fb','The package ___ yesterday has not arrived yet.',['sent','sending','was sent','sends'],'「昨日送られた荷物」→ 名詞を後ろから修飾する過去分詞。'],
+      ['er','Scientists {have} {discover} a new {species} of {frog}.',1,'discovered','現在完了は have ＋ 過去分詞。'],
+      ['fb','I look forward to ___ from you.',['hearing','hear','heard','be heard'],'look forward to の to は前置詞 → 後ろは -ing。'],
+      ['er','The teacher {let} the students {to leave} {early} {yesterday}.',1,'leave','使役 let ＋ O ＋ 原形。'],
+      ['fb','If it rains tomorrow, the game ___ canceled.',['will be','would be','is being','was'],'条件の if 節は現在形、主節は未来 will。']
+    ],
+    u14: [
+      ['fb','Never before ___ such a large earthquake in this region.',['had scientists recorded','scientists had recorded','recorded scientists had','had recorded scientists'],'否定語 Never が文頭 → 助動詞 had ＋ 主語 ＋ 過去分詞。'],
+      ['fb','I wonder ___.',['where she bought that bag','where did she buy that bag','where she did buy that bag','that bag where she bought'],'間接疑問は 疑問詞 ＋ S ＋ V。'],
+      ['er','She is {enough} {old} {to} {drive}.',0,'old enough','enough は形容詞の後ろに置く。'],
+      ['fb','Hardly ___ home when the phone rang.',['had I arrived','I had arrived','I arrived','did I arrived'],'Hardly が文頭 → 倒置。hardly … when ～「…するとすぐ～」。'],
+      ['fb','So difficult ___ that few students passed.',['was the exam','the exam was','did the exam','the exam did'],'So ＋ 形容詞 が文頭 → be動詞 ＋ 主語 の倒置。'],
+      ['er','Do you know {what} {time} {does} {the train leave}?',2,'what time the train leaves','間接疑問は普通の語順。does は不要。'],
+      ['fb','Only by working together ___ the problem.',['can we solve','we can solve','we solve','solve we can'],'Only ＋ 副詞句 が文頭 → 倒置。'],
+      ['fb','She has ___ money to buy a new car.',['enough','enough of','so','such'],'enough は名詞の前に置く。']
+    ],
+    u16: [
+      ['er','The reason {why} he {failed} was {because} he did not {study}.',2,'that','The reason … was that … が正しい形。'],
+      ['er','Please {return} the book {back} to the {library} {soon}.',1,'（back を削除）','return に「戻す」の意味が含まれるので back は重複。'],
+      ['fb','The sun ___ in the east.',['rises','raises','arises','rose up'],'自動詞「昇る」は rise。'],
+      ['er','She {laid} on the {sofa} {all} {afternoon}.',0,'lay','「横になる」lie の過去形は lay。laid は lay（置く）の過去形。'],
+      ['fb','My brother and I look ___.',['alike','like','likely','unlike'],'look alike ＝ 似ている。'],
+      ['er','The festival will be held {either} in June {nor} {in} {July}.',1,'or','either A or B のペア。'],
+      ['fb','Please ___ your hand if you have a question.',['raise','rise','rose','risen'],'他動詞「～を上げる」は raise。'],
+      ['er','The students {they} {finished} the project {ahead} of {schedule}.',0,'（they を削除）','主語 The students と they が重複。']
+    ]
+  };
+  Object.entries(ADD).forEach(([id, qs]) => byId(id).qs.push(...qs));
+
+  const NEW = [
+    ['u7', { id:'u20', sec:'S', title:'分詞（-ing と -ed）', sub:'「する」か「される」かで決まる', roi:3,
+      learn:[
+        {h:'分詞は名詞を修飾できる', b:`<ul><li><b>-ing（現在分詞）</b>：〜している（能動）　a <span class="hl">sleeping</span> baby</li>
+<li><b>-ed（過去分詞）</b>：〜された（受動）　a <span class="hl">broken</span> window</li></ul>
+<p>2語以上なら名詞の<b>後ろ</b>から修飾：the man <span class="hl">standing there</span>／languages <span class="hl">spoken in India</span></p>`},
+        {h:'見分けるコツ', b:`<div class="tip">修飾される名詞が <b>「する」側なら -ing</b>、<b>「される」側なら -ed</b>。</div>
+<div class="ex">products <span class="hl">made</span> in Japan（製品は「作られる」）<br>students <span class="hl">studying</span> abroad（学生は「勉強する」）</div>`},
+        {h:'感情の分詞', b:`<table class="tbl"><tr><th>-ing（感情を与える側）</th><th>-ed（感情を持つ人）</th></tr>
+<tr><td>The movie was boring.</td><td>I was bored.</td></tr>
+<tr><td>interesting / surprising</td><td>interested / surprised</td></tr></table>`},
+        {h:'分詞構文', b:`<div class="ex"><span class="hl">Completed</span> in 1889, the Eiffel Tower …<br><span class="hl">Having finished</span> the homework, the students …</div>
+<p>文頭の分詞の主語は<b>主節の主語</b>と同じ。主語が「される」なら過去分詞、先に終わったことなら Having ＋ 過去分詞。</p>`}
+      ],
+      qs:[
+        ['mc','interesting と interested の使い分けは？',['物・ことが人に興味を持たせる → interesting／人が興味を持つ → interested','どちらも同じ意味','interested は物に使う','interesting は過去形'],'感情の分詞は「与える側 -ing／感じる人 -ed」。'],
+        ['fb','The man ___ next to the door is my professor.',['standing','stands','stood','is standing'],'主語 The man の述語は is。「立っている男」→ 現在分詞で後ろから修飾。'],
+        ['fb','Most of the products ___ in this factory are exported.',['made','making','make','are made'],'製品は「作られる」側 → 過去分詞 made。述語は are exported。'],
+        ['er','The lecture was so {bored} that {many} students {fell} {asleep}.',0,'boring','講義は退屈「させる」側 → boring。'],
+        ['er','I was {interesting} {in} the {history} of {ancient} Rome.',0,'interested','人が興味を持っている → interested。'],
+        ['fb','___ in 1889, the Eiffel Tower was once the tallest structure in the world.',['Completed','Completing','It was completed','To complete'],'塔は「完成された」側 → 過去分詞の分詞構文。'],
+        ['fb','___ the homework, the students went outside to play.',['Having finished','Finished','To finish','Have finished'],'宿題を終えたのは遊びに行くより前 → Having ＋ 過去分詞。'],
+        ['er','The {stolen} painting was {finding} in a {small} {town}.',1,'found','受動態 was ＋ 過去分詞。find – found – found。'],
+        ['fb','There are many languages ___ in India.',['spoken','speaking','speak','to speaking'],'言語は「話される」側 → 過去分詞で後ろから修飾。'],
+        ['er','Rice is the {main} food {eating} by {millions} of {people}.',1,'eaten','食べ物は「食べられる」側 → eaten。'],
+        ['fb','The news was ___ to everyone.',['surprising','surprised','surprise','surprisingly'],'ニュースは人を驚かせる側 → surprising。'],
+        ['er','Fossils {discovering} in the {desert} {provide} clues {about} ancient life.',0,'discovered','化石は「発見される」側 → discovered。']
+      ]
+    }],
+    ['u12', { id:'u21', sec:'S', title:'名詞節と同格の that', sub:'that / whether / what のカタマリ', roi:2,
+      learn:[
+        {h:'名詞節＝文が名詞の役割をする', b:`<ul><li><b>that S V</b>：〜ということ</li><li><b>whether / if S V</b>：〜かどうか</li><li><b>疑問詞 S V</b>：何／なぜ／どこ…か</li><li><b>what S V</b>：〜すること・もの</li></ul>
+<div class="ex"><span class="hl">Whether he will come</span> is uncertain.（主語）<br>Scientists agree <span class="hl">that exercise improves health</span>.（目的語）</div>`},
+        {h:'主語になる名詞節のルール', b:`<ul><li>主語の位置では <b>if は使えない</b> → Whether</li><li>名詞節が主語なら動詞は<b>単数扱い</b>：What they found <b>was</b> …</li><li>It is ＋ 形容詞 ＋ that …（形式主語）も頻出</li></ul>`},
+        {h:'同格の that', b:`<div class="ex">the fact <span class="hl">that he lied</span>／the news <span class="hl">that the team had won</span></div>
+<div class="tip">that の後ろが<b>完全な文</b>なら同格、<b>主語か目的語が欠けた文</b>なら関係代名詞。</div>`}
+      ],
+      qs:[
+        ['mc','同格の that と関係代名詞の that の見分け方は？',['後ろが完全な文なら同格、主語か目的語が欠けていれば関係代名詞','前の名詞が人なら同格','カンマがあれば同格','見分けられない'],'the fact that he lied（he lied は完全な文）は同格。'],
+        ['fb','___ he will come to the party is still uncertain.',['Whether','If','That','What'],'「来るかどうか」が主語。主語の位置で if は使えないので Whether。'],
+        ['fb','Scientists agree ___ regular exercise improves health.',['that','what','which','whether that'],'agree の目的語になる「〜ということ」→ that節。'],
+        ['fb','___ you need is a good night\'s sleep.',['What','That','Which','It'],'「あなたに必要なもの」→ 先行詞を含む What。'],
+        ['fb','The fact ___ he lied surprised everyone.',['that','which','what','of'],'he lied は完全な文 → 同格の that。'],
+        ['er','The question {is} {what} the plan {will work} {or not}.',1,'whether','「〜かどうか」は whether … or not。'],
+        ['fb','I am not sure ___ the store is open on Sundays.',['whether','what','that','which'],'「開いているかどうか」→ whether。'],
+        ['er','What the scientists {discovered} {were} {truly} {surprising}.',1,'was','What 節が主語なら単数扱い → was。'],
+        ['fb','It is surprising ___ so few people know about the disease.',['that','what','which','if'],'形式主語 It ＋ is ＋ 形容詞 ＋ that節。'],
+        ['er','There is {a} {strong} {evidence} {that} smoking causes cancer.',0,'（a を削除）','evidence は不可算名詞なので a はつかない。that は同格。'],
+        ['fb','The researchers could not explain ___.',['why the bees disappeared','why did the bees disappear','the bees why disappeared','that why the bees disappeared'],'間接疑問は 疑問詞 ＋ S ＋ V。'],
+        ['fb','The news ___ the team had won spread quickly.',['that','which','what','whose'],'the team had won は完全な文 → 同格の that。']
+      ]
+    }],
+    ['u16', { id:'u22', sec:'S', title:'前置詞と語法', sub:'at/on/in・by/until・決まった組み合わせ', roi:2,
+      learn:[
+        {h:'時の前置詞', b:`<table class="tbl"><tr><td><b>at</b></td><td>時刻・一点：at 9 a.m.／at noon</td></tr>
+<tr><td><b>on</b></td><td>曜日・日付：on Monday／on July 4</td></tr>
+<tr><td><b>in</b></td><td>月・年・季節：in May／in 1969／in winter</td></tr></table>`},
+        {h:'まぎらわしいペア', b:`<ul><li><b>by</b>（〜までに：期限）／<b>until</b>（〜までずっと：継続）</li>
+<li><b>for</b> ＋ 期間の長さ（for three nights）／<b>during</b> ＋ 出来事・期間名（during the winter）</li>
+<li>前置詞の後ろは<b>名詞か -ing</b></li></ul>`},
+        {h:'動詞＋前置詞の決まった組み合わせ', b:`<table class="tbl">
+<tr><td>depend on</td><td>consist of</td></tr><tr><td>result in（結果）</td><td>result from（原因）</td></tr>
+<tr><td>contribute to</td><td>differ from</td></tr><tr><td>be interested in</td><td>focus on</td></tr></table>
+<div class="tip">Written Expressionでは前置詞だけがこっそり入れかわっていることが多い！</div>`}
+      ],
+      qs:[
+        ['mc','by と until の違いは？',['by は「〜までに（期限）」、until は「〜までずっと（継続）」','どちらも同じ意味','by は場所にしか使わない','until は期限を表す'],'Submit it by Friday.（金曜までに）／Stay until Friday.（金曜までずっと）'],
+        ['fb','The meeting will begin ___ 9 a.m.',['at','on','in','by'],'時刻には at。'],
+        ['fb','The first moon landing took place ___ 1969.',['in','on','at','by'],'年には in。'],
+        ['er','The museum is {closed} {in} {Mondays} {and} holidays.',1,'on','曜日には on。'],
+        ['fb','Please submit your report ___ Friday.',['by','until','since','for'],'提出の期限 → by。'],
+        ['fb','Many animals sleep ___ the winter.',['during','for','while','since'],'the winter（期間名）→ during。while の後ろは節。'],
+        ['er','Water {consists} {from} hydrogen {and} {oxygen}.',1,'of','consist of 〜「〜から成る」。'],
+        ['fb','The success of the project depends ___ teamwork.',['on','in','at','with'],'depend on 〜。'],
+        ['er','The flood {resulted} {from} heavy {damage} to the {town}.',1,'in','洪水が損害を「もたらした」→ result in。result from は原因側。'],
+        ['fb','Smoking can contribute ___ heart disease.',['to','for','at','with'],'contribute to 〜「〜の一因となる」。'],
+        ['er','British English {differs} {than} American English {in} {spelling}.',1,'from','differ from 〜。'],
+        ['fb','She is interested ___ learning Chinese.',['in','on','at','for'],'be interested in 〜。前置詞の後ろなので learning。'],
+        ['er','He {stayed} at the hotel {during} three {nights} {last week}.',1,'for','期間の長さ（three nights）には for。']
+      ]
+    }]
+  ];
+  NEW.forEach(([after, u]) => U.splice(U.findIndex(x => x.id === after) + 1, 0, u));
+})();

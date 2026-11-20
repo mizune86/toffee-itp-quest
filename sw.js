@@ -1,4 +1,4 @@
-const CACHE = 'toffee-itp-v2';
+const CACHE = 'toffee-itp-v3';
 const CORE = [
   './',
   'index.html',
